@@ -26,3 +26,8 @@ class UserPublic(BaseModel):
 
 class UserList(BaseModel):
     users: list[UserPublic]
+
+
+class Token(BaseModel):
+    access_token: str  # O token que vamos gerar
+    token_type: str  # O modelo que o cliente deve usar para Autorização

@@ -20,6 +20,27 @@ def test_read_root_deve_retornar_ok_e_ola_mundo(client):
     assert response.text == html
 
 
+def test_login_deve_retornar_token(client, user):
+    response = client.post(
+        '/token',
+        data={'username': user.email, 'password': user.clean_password},
+    )
+    token = response.json()
+    assert response.status_code == HTTPStatus.OK
+    assert token['token_type'] == 'Bearer'
+    assert 'access_token' in token
+
+
+def test_login_deve_retornar_unauthorized(client, user):
+    response = client.post(
+        '/token',
+        data={'username': user.email, 'password': '654321'},
+    )
+    token = response.json()
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert 'access_token' not in token
+
+
 def test_create_user_deve_retornar_created_e_usuario_sem_senha(client):
     # Valida UserSchema
     response = client.post(

@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from fast_zero.app import app
 from fast_zero.database import get_session
 from fast_zero.models import User, table_registry
+from fast_zero.security import get_password_hash
 
 
 @pytest.fixture
@@ -50,8 +51,15 @@ def session():
 @pytest.fixture
 def user(session):
     """Fixture para criar um usuário de teste no banco de dados."""
-    user = User(username='alice', email='alice@email.com', password='123456')
+    password = '123456'
+    user = User(
+        username='alice',
+        email='alice@email.com',
+        password=get_password_hash(password),
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    user.clean_password = password  # monkey patch
     return user

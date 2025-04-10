@@ -2,11 +2,17 @@ from http import HTTPStatus
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
 from fast_zero.database import get_session
 from fast_zero.models import User
-from fast_zero.schemas import Message, UserList, UserPublic, UserSchema
+from fast_zero.schemas import Message, Token, UserList, UserPublic, UserSchema
+from fast_zero.security import (
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 
 app = FastAPI()
 database = []
@@ -25,6 +31,25 @@ def read_root():
     </html>
     """
     return html
+
+
+@app.post('/token', response_model=Token)
+def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session=Depends(get_session),
+):
+    user = session.scalar(select(User).where(User.email == form_data.username))
+
+    if not user or not verify_password(form_data.password, user.password):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail='Usuário ou senha inválidos',
+            # headers={'WWW-Authenticate': 'Bearer'},
+        )
+
+    access_token = create_access_token(data_payload={'sub': user.email})
+
+    return {'access_token': access_token, 'token_type': 'Bearer'}
 
 
 @app.post('/users/', status_code=HTTPStatus.CREATED, response_model=UserPublic)
@@ -48,7 +73,9 @@ def create_user(user: UserSchema, session=Depends(get_session)):
             )
 
     db_user = User(
-        username=user.username, password=user.password, email=user.email
+        username=user.username,
+        email=user.email,
+        password=get_password_hash(user.password),
     )
     session.add(db_user)
     session.commit()
@@ -85,9 +112,31 @@ def update_user(user_id: int, user: UserSchema, session=Depends(get_session)):
             detail='Usuário não encontrado',
         )
 
+    # usuário já existe se houver outro user_id com mesmo username
+    outro_usuario_com_mesmo_username = session.scalar(
+        select(User)
+        .where(User.username == user.username)
+        .where(User.id != user_id)
+    )
+    if outro_usuario_com_mesmo_username:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Usuário já existe',
+        )
+
+    # email já existe se houver outro user_id com mesmo email
+    outro_usuario_com_mesmo_email = session.scalar(
+        select(User).where(User.email == user.email).where(User.id != user_id)
+    )
+    if outro_usuario_com_mesmo_email:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail='Email já existe',
+        )
+
     db_user.username = user.username
     db_user.email = user.email
-    db_user.password = user.password
+    db_user.password = get_password_hash(user.password)
 
     session.commit()
     session.refresh(db_user)
